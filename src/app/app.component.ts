@@ -23,7 +23,13 @@ export class AppComponent implements OnInit {
           audioBitsPerSecond: 128000,
           // videoBitsPerSecond: 2500000,
           mimeType: 'audio/mp4; codecs="mp4a.40.2"',
+		//   mimeType: 'audio/webm;codecs=opus'
         };
+		if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+			const fallback = 'audio/webm;codecs=opus';
+            console.warn(`${options.mimeType} not supported. Falling back to ${fallback}`);
+            options.mimeType = fallback;
+        }
 				this.mediaRecorder = new MediaRecorder(stream, options);
 				this.mediaRecorder.onstop = () => {
 					console.log('data available after MediaRecorder.stop() called.');
