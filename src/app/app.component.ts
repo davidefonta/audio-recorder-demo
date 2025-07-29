@@ -13,8 +13,24 @@ export class AppComponent implements OnInit {
 	mediaRecorder?:MediaRecorder;
 	chunks: Blob[] = [];
 	audioFiles:SafeUrl[] = [];
+
+	wakeLock: WakeLockSentinel | null = null;
+
 	constructor(private cd: ChangeDetectorRef, private dom: DomSanitizer) {}
 	ngOnInit() {
+
+		document.addEventListener('visibilitychange', async () => {
+			if(this.wakeLock){
+				if(document.visibilityState === 'hidden' ){
+					this.releaseWakeLock(this.wakeLock) 
+				} else {
+					this.wakeLock = await this.getWakeLock();
+
+				}
+
+			}
+		});
+
 		navigator.mediaDevices.getUserMedia(
 			{audio: true}).then(
 			stream => {
@@ -26,13 +42,24 @@ export class AppComponent implements OnInit {
 		//   mimeType: 'audio/webm;codecs=opus'
         };
 		if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-			const fallback = 'audio/webm;codecs=opus';
+			const fallback = 'audio/ogg;codecs=opus';
             console.warn(`${options.mimeType} not supported. Falling back to ${fallback}`);
             options.mimeType = fallback;
         }
 				this.mediaRecorder = new MediaRecorder(stream, options);
+
+				this.mediaRecorder.onstart = async () => {
+					this.wakeLock = await this.getWakeLock();
+				}
+
+				this.mediaRecorder.onerror = (err) => {
+					this.wakeLock = this.releaseWakeLock(this.wakeLock);
+					console.error("MediaRecorder onerror", err);
+				}
+
 				this.mediaRecorder.onstop = () => {
 					console.log('data available after MediaRecorder.stop() called.');
+					this.wakeLock = this.releaseWakeLock(this.wakeLock);
 
 					// var clipName = prompt('Enter a name for your sound clip');
 
@@ -71,14 +98,44 @@ export class AppComponent implements OnInit {
 			},
 		);
 	}
+
 	startRecording() {
 		this.mediaRecorder?.start();
 		console.log(this.mediaRecorder?.state);
 		console.log('recorder started');
 	}
+
 	stopRecording() {
 		this.mediaRecorder?.stop();
 		console.log(this.mediaRecorder?.state);
 		console.log('recorder stopped');
 	}
+
+	async getWakeLock():Promise<WakeLockSentinel | null> {
+		// create an async function to request a wake lock
+		let wakeLock: WakeLockSentinel | null = null
+		if("wakeLock" in navigator) {
+			try {
+				wakeLock = await navigator.wakeLock.request("screen");
+				console.log('Wake Lock taken')
+
+			} catch (err) {
+				console.warn('Can\'t get wake Lock', err)
+			}
+		} else {
+			console.warn("Wake lock is not supported by this browser.");
+		}
+		return wakeLock;
+	}
+
+	releaseWakeLock(wakeLock:WakeLockSentinel | null): null {
+		if(wakeLock) {
+			wakeLock.release();
+			console.log('Wake Lock released');
+		}
+		return null
+
+	}
+
+	
 }
